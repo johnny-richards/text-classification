@@ -51,6 +51,8 @@ def main(args):
             else:
                 model.eval()
             loss_tracker = []
+            correct_tracker = 0
+            total_tracker = 0
             for iteration, batch in enumerate(data_loader):
                 batch_size = batch['input'].size(0)
                 for k, v in batch.items():
@@ -58,6 +60,11 @@ def main(args):
                         v = v.cuda()
                 output = model(batch['input'], batch['length'])
                 label = batch['label']
+                value, rank = output.topk(1)
+                rank = rank.squeeze()
+                corrects = torch.sum((rank == label).long())
+                correct_tracker += corrects.item()
+                total_tracker += batch_size
                 loss = NLL(output, label) / batch_size
                 loss_tracker.append(loss.item())
                 if split == 'train':
@@ -65,8 +72,8 @@ def main(args):
                     loss.backward()
                     optimizer.step()
                 if iteration % args.print_every == 0 or (iteration + 1) == len(data_loader):
-                    print('%s Batch %4d/%i Loss %9.4f' % (split.upper(), iteration, len(data_loader)-1, loss.item()))
-            print('global loss {}'.format(np.mean(loss_tracker)))
+                    print('%s Batch %4d/%i Loss %9.4f correct classification %i total results %i accuracy: %9.4f' % (split.upper(), iteration, len(data_loader)-1, loss.item(), corrects.item(), batch_size, float(corrects.item())/float(batch_size)))
+            print('global loss {}, accuracy {}'.format(np.mean(loss_tracker), float(correct_tracker)/float(total_tracker)))
             if split=='train':
                 checkpoint_path = os.path.join(save_model_path, 'E%i.ckpt'%(epoch))
                 torch.save(model.state_dict(), checkpoint_path)
